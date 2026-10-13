@@ -1,0 +1,62 @@
+# Observatório de Preços e Inflação (Brasil)
+
+> **Status: em andamento (etapa S3, ingestão).** Este README cresce a cada etapa.
+
+Pipeline ELT com dados públicos para analisar como o preço dos combustíveis ao
+consumidor se relaciona com inflação (IPCA), Selic e câmbio.
+
+**Fontes:** ANP (preços de revenda), IBGE SIDRA (IPCA) e Banco Central SGS (Selic e câmbio).
+**Stack:** Python, DuckDB, dbt, Airflow (ou Kestra), Docker, GitHub Actions.
+
+## O que já existe
+
+| Etapa | Entrega | Status |
+| --- | --- | --- |
+| S3 | Loader da ANP para DuckDB (camada `raw`), com testes | Pronto |
+| S3 | Ingestão de SIDRA e SGS | Pendente |
+| S4 | Modelagem dimensional em dbt | Pendente |
+| S5 | Testes de qualidade, incremental e documentação | Pendente |
+| S6 | Orquestração em Docker | Pendente |
+| S7 | CI, diagrama e dashboard | Pendente |
+
+## Como rodar a ingestão da ANP
+
+Requer Python 3.10 ou superior. Os CSVs da ANP não ficam no Git: baixe-os da
+[página de dados abertos da ANP](https://www.gov.br/anp/pt-br/centrais-de-conteudo/dados-abertos/serie-historica-de-precos-de-combustiveis)
+e organize assim:
+
+```
+data/raw/anp/
+├── semestral/           # CSVs semestrais (descompactados dos ZIPs)
+├── mensal/              # CSVs mensais
+└── ultimas_4_semanas/   # CSVs das quatro últimas semanas
+```
+
+Em seguida (PowerShell):
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements-dev.txt
+python -m pytest
+python -m ingestion anp
+```
+
+O banco é criado em `warehouse/observatorio.duckdb` (ignorado pelo Git). Rodar o
+comando de novo não duplica dados: arquivos inalterados são pulados, e `--force`
+recarrega todos.
+
+## Estrutura
+
+```
+ingestion/    # loaders Python (config, db, anp, cli) e testes
+scripts/      # probe_sources.py: verifica cobertura real das fontes
+docs/         # decisions.md: decisões técnicas e justificativas
+data/         # dados brutos (fora do Git)
+warehouse/    # arquivo DuckDB (fora do Git)
+```
+
+## Limitações conhecidas
+
+- Os preços da ANP vêm de uma pesquisa semanal por **amostra** de postos, não de um censo.
+- A frequência de atualização depende de cada fonte.

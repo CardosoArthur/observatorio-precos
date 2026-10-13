@@ -1,0 +1,28 @@
+# Data and warehouse never go to Git
+data/
+warehouse/
+logs/
+*.duckdb
+*.duckdb.wal
+
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+
+# dbt (added in a later stage)
+dbt_project/target/
+dbt_project/dbt_packages/
+dbt_project/logs/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

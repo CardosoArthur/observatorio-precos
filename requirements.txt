@@ -1,0 +1,5 @@
+duckdb~=1.5
+python-dotenv~=1.2
+# used only by scripts/probe_sources.py
+requests~=2.34
+pandas~=2.3
