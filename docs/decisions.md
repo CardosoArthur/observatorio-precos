@@ -61,3 +61,14 @@ mesmo arquivo, usar a média do preço por chave.
 - **Decision:** the unit of load is the *source key* (`sgs/<code>`, `sidra/7060`). Each key is replaced in one transaction (DELETE + INSERT + metadata) and skipped if the payload SHA-256 is unchanged. Empty payloads fail without deleting existing rows. SGS history is fetched in ~5-year windows; HTTP uses retry with exponential backoff. Raw stays all VARCHAR.
 - **Data-quality rule:** series 432 may carry future dates; dbt staging must filter `data <= current_date`. The cause of those dates is not yet confirmed.
 - **Consequence:** one failing series does not block the others; the run exits with code 1 if anything failed.
+
+## ADR-007: dbt-duckdb staging layer
+
+- **Context:** raw is all VARCHAR and keeps the overlaps and format quirks of the sources (ADR-002, ADR-005).
+- **Decision:** `dbt-duckdb` with one schema per layer (`staging`, later `marts`) through a `generate_schema_name` override. `profiles.yml` lives in `dbt/`, has no credentials and reads `DUCKDB_PATH`. No external dbt packages: extra checks are singular SQL tests in `dbt/tests/`.
+- **Staging rules:**
+  - ANP: types parsed with `try_*`; CNPJ reduced to digits; unit standardised (`R$/litro`, `R$/m3`); brand `VIBRA ENERGIA` mapped to `VIBRA`; one row per (cnpj_revenda, produto, data_coleta). Source priority `mensal > semestral > ultimas_4_semanas`; repeated keys inside the winning group are averaged. `stg_anp_precos` is a table because it is the large model.
+  - SGS: typed; rows with `data > current_date` dropped (ADR-006).
+  - IPCA: `mes_referencia` as a date; SIDRA's `...` marker (no data) becomes NULL. Variable 2265 (12-month change) has no value for 202001-202011 (11 rows) because the series starts in 2020-01.
+- **Evidence (copy of the real warehouse, 2026-10-13):** 4,227,065 raw rows -> 4,178,146 staged. The 48,919 removed rows are the 48,899 cross-file overlaps plus 20 in-file duplicates found by the probe. 23 dbt tests pass.
+- **Consequence:** brand harmonisation covers only the documented VIBRA case; other possible variants (e.g. ALE vs ALESAT) are left as delivered because the equivalence is not confirmed.

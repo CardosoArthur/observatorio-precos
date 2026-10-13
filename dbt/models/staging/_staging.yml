@@ -1,0 +1,58 @@
+version: 2
+
+models:
+  - name: stg_anp_precos
+    description: >
+      ANP prices typed and cleaned, one row per (cnpj_revenda, produto, data_coleta).
+      Overlaps between files resolved by source priority; repeated keys averaged (ADR-005).
+    columns:
+      - name: cnpj_revenda
+        data_tests: [not_null]
+      - name: produto
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [GASOLINA, GASOLINA ADITIVADA, ETANOL, DIESEL, DIESEL S10, GNV]
+      - name: data_coleta
+        data_tests: [not_null]
+      - name: valor_venda
+        data_tests: [not_null]
+      - name: unidade_medida
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['R$/litro', 'R$/m3']
+      - name: source_group
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [mensal, semestral, ultimas_4_semanas]
+
+  - name: stg_bcb_sgs
+    description: BCB SGS series typed, without future dates.
+    columns:
+      - name: serie_codigo
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [1, 11, 432]
+                quote: false
+      - name: data
+        data_tests: [not_null]
+      - name: valor
+        data_tests: [not_null]
+
+  - name: stg_ibge_ipca
+    description: IPCA (general index) typed; `valor` is NULL where SIDRA has no data ('...').
+    columns:
+      - name: variavel_codigo
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [63, 66, 69, 2265]
+                quote: false
+      - name: mes_referencia
+        data_tests: [not_null]

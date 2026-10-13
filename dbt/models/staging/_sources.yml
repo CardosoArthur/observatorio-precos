@@ -1,0 +1,13 @@
+version: 2
+
+sources:
+  - name: raw
+    schema: raw
+    description: Data exactly as delivered by the sources (all VARCHAR), loaded by `python -m ingestion`.
+    tables:
+      - name: anp_precos
+        description: ANP fuel prices, one row per CSV line (files overlap; see ADR-005).
+      - name: bcb_sgs
+        description: BCB SGS series 1 (USD/BRL), 11 (Selic daily), 432 (Selic target).
+      - name: ibge_ipca
+        description: IBGE SIDRA table 7060 (IPCA, general index), 4 variables.

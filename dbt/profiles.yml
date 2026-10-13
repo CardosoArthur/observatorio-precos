@@ -1,0 +1,10 @@
+# Read by dbt via --profiles-dir dbt. No credentials: DuckDB is a local file.
+# Run dbt from the repository root so the relative default path resolves.
+observatorio:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "{{ env_var('DUCKDB_PATH', 'warehouse/observatorio.duckdb') }}"
+      schema: main
+      threads: 4

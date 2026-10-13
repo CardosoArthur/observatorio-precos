@@ -1,6 +1,6 @@
 # Observatório de Preços e Inflação (Brasil)
 
-> **Status: em andamento (etapa S3, ingestão).** Este README cresce a cada etapa.
+> **Status: em andamento (etapa S4, modelagem dbt: staging pronto).** Este README cresce a cada etapa.
 
 Pipeline ELT com dados públicos para analisar como o preço dos combustíveis ao
 consumidor se relaciona com inflação (IPCA), Selic e câmbio.
@@ -12,9 +12,9 @@ consumidor se relaciona com inflação (IPCA), Selic e câmbio.
 
 | Etapa | Entrega | Status |
 | --- | --- | --- |
-| S3 | Loader da ANP para DuckDB (camada `raw`), com testes | Pronto |
-| S3 | Ingestão de SIDRA e SGS | Pendente |
-| S4 | Modelagem dimensional em dbt | Pendente |
+| S3 | Loaders da ANP, SIDRA e SGS para DuckDB (camada `raw`), com testes | Pronto |
+| S4 | dbt: camada `staging` (tipagem, limpeza, deduplicação) com testes | Pronto |
+| S4 | dbt: dimensões, fato e mart mensal | Pendente |
 | S5 | Testes de qualidade, incremental e documentação | Pendente |
 | S6 | Orquestração em Docker | Pendente |
 | S7 | CI, diagrama e dashboard | Pendente |
@@ -42,15 +42,31 @@ python -m pytest
 python -m ingestion anp
 ```
 
+Para as APIs: `python -m ingestion sgs`, `python -m ingestion sidra` ou
+`python -m ingestion all` (ANP + SGS + SIDRA, em sequência: o DuckDB aceita um
+escritor por vez).
+
 O banco é criado em `warehouse/observatorio.duckdb` (ignorado pelo Git). Rodar o
 comando de novo não duplica dados: arquivos inalterados são pulados, e `--force`
 recarrega todos.
 
+## Como rodar o dbt
+
+Na raiz do repositório, com a venv ativa e o `raw` já carregado:
+
+```powershell
+dbt build --project-dir dbt --profiles-dir dbt
+```
+
+Cria as views/tabelas do schema `staging` e roda os testes. O caminho do banco
+vem de `DUCKDB_PATH` (padrão `warehouse/observatorio.duckdb`).
+
 ## Estrutura
 
 ```
-ingestion/    # loaders Python (config, db, anp, cli) e testes
-scripts/      # probe_sources.py: verifica cobertura real das fontes
+ingestion/    # loaders Python (anp, sgs, sidra, cli) e testes
+dbt/          # projeto dbt: models/staging, tests, macros, profiles.yml
+scripts/      # probe_sources.py (cobertura das fontes) e check_raw.py (sanidade do raw)
 docs/         # decisions.md: decisões técnicas e justificativas
 data/         # dados brutos (fora do Git)
 warehouse/    # arquivo DuckDB (fora do Git)

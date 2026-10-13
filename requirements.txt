@@ -3,3 +3,5 @@ python-dotenv~=1.2
 # used only by scripts/probe_sources.py
 requests~=2.34
 pandas~=2.3
+# dbt (tested with dbt-core 1.12.5 + duckdb 1.5.6)
+dbt-duckdb~=1.11
