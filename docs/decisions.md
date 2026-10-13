@@ -54,3 +54,10 @@ O arquivo do 1º semestre de 2025 traz 9.114 linhas completamente vazias no fina
 **Decisão.** O `raw` mantém tudo o que cada arquivo entregou (inclusive a sobreposição). No
 staging: em duplicidade entre arquivos, o mensal prevalece sobre o de quatro semanas; dentro do
 mesmo arquivo, usar a média do preço por chave.
+
+## ADR-006: API sources loaded per series, raw keeps what the API serves
+
+- **Context:** SGS (3 series) and SIDRA (IPCA, table 7060) have no files, so the ANP per-file idempotency does not apply. The local probe (2026-10-12) showed SGS series 432 (Selic target) returning dates after today (02-04/11/2026, all 13.75).
+- **Decision:** the unit of load is the *source key* (`sgs/<code>`, `sidra/7060`). Each key is replaced in one transaction (DELETE + INSERT + metadata) and skipped if the payload SHA-256 is unchanged. Empty payloads fail without deleting existing rows. SGS history is fetched in ~5-year windows; HTTP uses retry with exponential backoff. Raw stays all VARCHAR.
+- **Data-quality rule:** series 432 may carry future dates; dbt staging must filter `data <= current_date`. The cause of those dates is not yet confirmed.
+- **Consequence:** one failing series does not block the others; the run exits with code 1 if anything failed.

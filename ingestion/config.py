@@ -10,6 +10,7 @@ from pathlib import Path
 class Settings:
     duckdb_path: Path
     anp_raw_dir: Path
+    api_start_date: str
     log_level: str
 
 
@@ -18,5 +19,6 @@ def load_settings() -> Settings:
     return Settings(
         duckdb_path=Path(os.getenv("DUCKDB_PATH", "warehouse/observatorio.duckdb")),
         anp_raw_dir=Path(os.getenv("ANP_RAW_DIR", "data/raw/anp")),
+        api_start_date=os.getenv("API_START_DATE", "2022-01-01"),
         log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
     )
