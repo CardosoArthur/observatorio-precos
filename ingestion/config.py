@@ -11,6 +11,7 @@ class Settings:
     duckdb_path: Path
     anp_raw_dir: Path
     api_start_date: str
+    export_dir: Path
     log_level: str
 
 
@@ -20,5 +21,6 @@ def load_settings() -> Settings:
         duckdb_path=Path(os.getenv("DUCKDB_PATH", "warehouse/observatorio.duckdb")),
         anp_raw_dir=Path(os.getenv("ANP_RAW_DIR", "data/raw/anp")),
         api_start_date=os.getenv("API_START_DATE", "2022-01-01"),
+        export_dir=Path(os.getenv("EXPORT_DIR", "exports")),
         log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
     )

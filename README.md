@@ -1,6 +1,6 @@
 # Observatório de Preços e Inflação (Brasil)
 
-> **Status: em andamento (etapa S5, qualidade e documentação: concluída).** Este README cresce a cada etapa.
+> **Status: em andamento (etapa S6, orquestração com Airflow: concluída).** Este README cresce a cada etapa.
 
 Pipeline ELT com dados públicos para analisar como o preço dos combustíveis ao
 consumidor se relaciona com inflação (IPCA), Selic e câmbio.
@@ -16,7 +16,7 @@ consumidor se relaciona com inflação (IPCA), Selic e câmbio.
 | S4 | dbt: camada `staging` (tipagem, limpeza, deduplicação) com testes | Pronto |
 | S4 | dbt: dimensões, fato e mart mensal (preço x IPCA x Selic x câmbio) | Pronto |
 | S5 | Testes de qualidade (dados e unitários), staging incremental, freshness e docs | Pronto |
-| S6 | Orquestração em Docker | Pendente |
+| S6 | Orquestração: DAG do Airflow em Docker (ingestão, dbt, export Parquet) | Pronto |
 | S7 | CI, diagrama e dashboard | Pendente |
 
 ## Como rodar a ingestão da ANP
@@ -72,10 +72,36 @@ O `stg_anp_precos` é incremental: depois de carregar um arquivo novo no `raw`, 
 recalcula só as chaves afetadas. Se um arquivo for **removido** do `raw`, use `--full-refresh`. O caminho do banco
 vem de `DUCKDB_PATH` (padrão `warehouse/observatorio.duckdb`).
 
+## Como rodar com Airflow (Docker)
+
+Requer Docker Desktop. Na raiz do repositório:
+
+```powershell
+docker compose build
+docker compose up airflow-init
+docker compose up -d
+```
+
+Abra http://localhost:8080 (ambiente local de desenvolvimento, sem senha). A DAG
+`observatorio_pipeline` roda todo dia às 06:00 (America/Sao_Paulo):
+
+```
+ingest_sgs -> ingest_sidra -> ingest_anp -> dbt_build -> export_marts -> dbt_freshness
+```
+
+As tarefas rodam em sequência porque o DuckDB aceita um escritor por vez. Para disparar
+agora: `docker compose exec airflow-scheduler airflow dags trigger observatorio_pipeline`.
+
+- O warehouse fica num volume Docker (`warehouse`), separado do `warehouse/` local.
+- Os Parquet para dashboard saem em `exports/` (ignorado pelo Git).
+- Os CSVs da ANP são lidos de `data/raw/anp` (somente leitura).
+- Para desligar: `docker compose down` (use `-v` para apagar também o warehouse e o histórico).
+
 ## Estrutura
 
 ```
-ingestion/    # loaders Python (anp, sgs, sidra, cli) e testes
+ingestion/    # loaders Python (anp, sgs, sidra, export, cli) e testes
+airflow/      # DAG, Dockerfile e dependências do pipeline (docker-compose.yaml na raiz)
 dbt/          # projeto dbt: models/staging, tests, macros, profiles.yml
 scripts/      # probe_sources.py (cobertura das fontes) e check_raw.py (sanidade do raw)
 docs/         # decisions.md: decisões técnicas e justificativas

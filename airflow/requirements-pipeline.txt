@@ -1,0 +1,7 @@
+# Dependencies of the pipeline itself (ingestion + dbt). Installed in an isolated virtualenv
+# inside the Airflow image so they never clash with Airflow's own pinned packages.
+# Keep the pins in sync with the repository requirements.txt.
+duckdb~=1.5
+python-dotenv~=1.2
+requests~=2.34
+dbt-duckdb~=1.11

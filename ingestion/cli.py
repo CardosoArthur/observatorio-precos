@@ -1,4 +1,4 @@
-"""Command line entry point: `python -m ingestion {anp,sgs,sidra,all}`."""
+"""Command line entry point: `python -m ingestion {anp,sgs,sidra,all,export}`."""
 from __future__ import annotations
 
 import argparse
@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from ingestion.anp import LoadResult, load_anp
 from ingestion.config import Settings, load_settings
 from ingestion.db import connect
+from ingestion.export import export_marts
 from ingestion.sgs import load_sgs
 from ingestion.sidra import load_sidra
 
@@ -24,10 +25,14 @@ def build_parser() -> argparse.ArgumentParser:
         ("sgs", "Load BCB SGS series into raw.bcb_sgs"),
         ("sidra", "Load IBGE SIDRA IPCA into raw.ibge_ipca"),
         ("all", "Run anp, sgs and sidra in sequence (DuckDB is single-writer)"),
+        ("export", "Export the dbt marts to Parquet files for dashboards"),
     ):
         cmd = sub.add_parser(name, help=helptext)
         cmd.add_argument("--db", type=Path, help="DuckDB file to write")
-        cmd.add_argument("--force", action="store_true", help="Reload unchanged data too")
+        if name != "export":
+            cmd.add_argument("--force", action="store_true", help="Reload unchanged data too")
+        else:
+            cmd.add_argument("--out-dir", type=Path, help="Folder for the Parquet files")
         if name in ("anp", "all"):
             cmd.add_argument("--raw-dir", type=Path, help="Folder with the ANP CSVs")
         if name in ("sgs", "all"):
@@ -56,7 +61,16 @@ def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(
         level=settings.log_level, format="%(asctime)s %(levelname)s %(name)s %(message)s"
     )
-    con = connect(args.db or settings.duckdb_path)
+    db_path = args.db or settings.duckdb_path
+    if args.command == "export":
+        con = duckdb.connect(str(db_path), read_only=True)
+        try:
+            export_marts(con, args.out_dir or settings.export_dir)
+        finally:
+            con.close()
+        return 0
+
+    con = connect(db_path)
     try:
         results = run(con, args, settings)
     finally:

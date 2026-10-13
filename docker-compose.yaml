@@ -1,0 +1,98 @@
+# Local Airflow (LocalExecutor + Postgres) running the observatorio_pipeline DAG.
+# Development setup: SimpleAuthManager with everyone as admin. Do not expose it to a network.
+#
+#   docker compose build
+#   docker compose up airflow-init
+#   docker compose up -d          # UI at http://localhost:8080
+#
+# The DuckDB warehouse lives in the named volume `warehouse` (not in a Windows bind mount:
+# DuckDB file locking is unreliable there). Parquet exports land in ./exports.
+
+x-airflow-common: &airflow-common
+  build:
+    context: ./airflow
+  image: observatorio-airflow:3.3.2
+  environment: &airflow-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__CORE__AUTH_MANAGER: airflow.api_fastapi.auth.managers.simple.simple_auth_manager.SimpleAuthManager
+    AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "true"
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
+    AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-apiserver:8080/execution/
+    # Must be identical in every Airflow container, otherwise task authentication fails.
+    AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW_JWT_SECRET:-local-dev-only-jwt-secret-change-me-0123456789abcdef0123456789abcdef}
+    # Pipeline settings read by the DAG, ingestion and dbt.
+    PROJECT_DIR: /opt/airflow/project
+    PIPELINE_PYTHON: /home/airflow/dbt-venv/bin/python
+    PIPELINE_DBT: /home/airflow/dbt-venv/bin/dbt
+    DUCKDB_PATH: /opt/airflow/warehouse/observatorio.duckdb
+    ANP_RAW_DIR: data/raw/anp
+    EXPORT_DIR: exports
+    DBT_TARGET_PATH: /tmp/dbt/target
+    DBT_LOG_PATH: /tmp/dbt/logs
+  volumes:
+    - ./airflow/dags:/opt/airflow/dags
+    - ./ingestion:/opt/airflow/project/ingestion
+    - ./dbt:/opt/airflow/project/dbt
+    - ./data/raw:/opt/airflow/project/data/raw:ro
+    - ./exports:/opt/airflow/project/exports
+    - warehouse:/opt/airflow/warehouse
+    - airflow-logs:/opt/airflow/logs
+  depends_on: &airflow-depends-on
+    postgres:
+      condition: service_healthy
+    airflow-init:
+      condition: service_completed_successfully
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 10s
+      retries: 5
+      start_period: 5s
+    restart: always
+
+  airflow-init:
+    <<: *airflow-common
+    command: airflow db migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  airflow-apiserver:
+    <<: *airflow-common
+    command: airflow api-server
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/api/v2/version"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+
+  airflow-scheduler:
+    <<: *airflow-common
+    command: airflow scheduler
+    restart: always
+
+  airflow-dag-processor:
+    <<: *airflow-common
+    command: airflow dag-processor
+    restart: always
+
+volumes:
+  postgres-db:
+  warehouse:
+  airflow-logs:

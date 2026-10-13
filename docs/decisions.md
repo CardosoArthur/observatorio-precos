@@ -92,3 +92,13 @@ mesmo arquivo, usar a média do preço por chave.
 - **New data tests:** no distinct raw key is lost in staging; the latest load of every source key succeeded; macro values (IPCA, Selic, USD/BRL) stay inside wide sanity bounds.
 - **Source freshness** uses the business date (collection date, observation date, reference month), not the load time. Thresholds are warn/error: ANP 45/120 days, SGS 7/15 days, IPCA 60/100 days. They will fire on a stale portfolio copy of the data by design.
 - **Docs:** every column of the 9 models has a description; `dbt docs generate` builds the catalog and the lineage graph.
+
+## ADR-010: Airflow in Docker with LocalExecutor
+
+- **Context:** the pipeline needs a scheduler with retries and visibility. DuckDB accepts one writer at a time.
+- **Decision:** Airflow 3.3.2 with LocalExecutor and Postgres for metadata; services: api-server, scheduler, dag-processor (no triggerer or workers: all tasks are plain Bash tasks). The official compose uses CeleryExecutor (Redis + workers), which adds services this project does not need. One DAG, `observatorio_pipeline`, daily at 06:00 America/Sao_Paulo, with `max_active_runs=1` and `max_active_tasks=1`: `ingest_sgs -> ingest_sidra -> ingest_anp -> dbt_build -> export_marts -> dbt_freshness`.
+- **Isolation:** ingestion and dbt run from a virtualenv inside the image (`/home/airflow/dbt-venv`), so they do not clash with Airflow's pinned dependencies. Tasks call `python -m ingestion ...` and `dbt ...` through Bash.
+- **Storage:** the DuckDB file lives in a Docker named volume, not in a Windows bind mount (file locking there is unreliable). ANP CSVs are mounted read-only; Parquet exports are written to `./exports`.
+- **Retries:** SGS and SIDRA tasks retry twice (5 min apart) because public APIs fail transiently; the other tasks do not retry, since a failure there is a data or code problem. Every step is idempotent, so a retry or re-run never duplicates data.
+- **Evidence (Airflow 3.3.2 installed outside Docker, 2026-10-13):** the DAG parses without import errors, the next run is computed as 06:00 in Sao Paulo, and `airflow tasks test` ran `ingest_anp`, `dbt_build` (70 of 70 passed), `export_marts` (8,833 rows in the mart) and `dbt_freshness` successfully. `ingest_sgs` and `ingest_sidra` need the public APIs, which were not reachable from the test environment. The Dockerfile and docker-compose.yaml were not executed there.
+- **Known limitations:** development setup only (SimpleAuthManager with all users as admin, default JWT secret unless `AIRFLOW_JWT_SECRET` is set); not suitable for exposure to a network. `ingest_anp` fails if `data/raw/anp` has no CSV, because the ANP files are placed by hand.

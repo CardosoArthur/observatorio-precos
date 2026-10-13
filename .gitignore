@@ -26,3 +26,4 @@ dbt_project/logs/
 Thumbs.db
 .vscode/
 .idea/
+exports/
