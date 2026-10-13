@@ -7,7 +7,24 @@ sources:
     tables:
       - name: anp_precos
         description: ANP fuel prices, one row per CSV line (files overlap; see ADR-005).
+        config:
+          loaded_at_field: "try_strptime(trim(data_coleta), '%d/%m/%Y')"
+          freshness:
+            warn_after: {count: 45, period: day}
+            error_after: {count: 120, period: day}
       - name: bcb_sgs
         description: BCB SGS series 1 (USD/BRL), 11 (Selic daily), 432 (Selic target).
+        config:
+          loaded_at_field: "try_strptime(trim(data), '%d/%m/%Y')"
+          freshness:
+            warn_after: {count: 7, period: day}
+            error_after: {count: 15, period: day}
       - name: ibge_ipca
         description: IBGE SIDRA table 7060 (IPCA, general index), 4 variables.
+        config:
+          loaded_at_field: "strptime(periodo_codigo || '01', '%Y%m%d')"
+          freshness:
+            warn_after: {count: 60, period: day}
+            error_after: {count: 100, period: day}
+      - name: _load_metadata
+        description: One row per load attempt (source key, hash, rows, status, error, duration).

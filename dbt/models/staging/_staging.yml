@@ -4,55 +4,93 @@ models:
   - name: stg_anp_precos
     description: >
       ANP prices typed and cleaned, one row per (cnpj_revenda, produto, data_coleta).
-      Overlaps between files resolved by source priority; repeated keys averaged (ADR-005).
+      Overlaps between files are resolved by source priority (mensal > semestral >
+      ultimas_4_semanas) and repeated keys are averaged (ADR-005). Incremental by key (ADR-009).
     columns:
       - name: cnpj_revenda
+        description: Station CNPJ, digits only (14 characters).
         data_tests: [not_null]
       - name: produto
+        description: Fuel product, upper case.
         data_tests:
           - not_null
           - accepted_values:
               arguments:
                 values: [GASOLINA, GASOLINA ADITIVADA, ETANOL, DIESEL, DIESEL S10, GNV]
       - name: data_coleta
+        description: Date the price was collected.
         data_tests: [not_null]
       - name: valor_venda
+        description: Resale price in R$ per litre (R$ per m3 for GNV). Average when the key repeats.
         data_tests: [not_null]
       - name: unidade_medida
+        description: Price unit, standardised to `R$/litro` or `R$/m3`.
         data_tests:
           - accepted_values:
               arguments:
                 values: ['R$/litro', 'R$/m3']
+      - name: bandeira
+        description: Station brand, upper case; `VIBRA ENERGIA` is mapped to `VIBRA`.
+      - name: revenda
+        description: Station trade name as delivered.
+      - name: regiao_sigla
+        description: Macro-region code (N, NE, CO, SE, S).
+      - name: uf
+        description: State code.
+      - name: municipio
+        description: Municipality, upper case.
+      - name: bairro
+        description: Neighbourhood as delivered.
+      - name: cep
+        description: Postal code as delivered.
       - name: source_group
+        description: Source group that supplied the row (the winner of the priority rule).
         data_tests:
           - accepted_values:
               arguments:
                 values: [mensal, semestral, ultimas_4_semanas]
+      - name: n_registros_origem
+        description: How many raw rows of the winning group were collapsed into this row.
+      - name: ingested_at
+        description: Newest raw load timestamp among all raw rows of the key. Incremental watermark.
 
   - name: stg_bcb_sgs
-    description: BCB SGS series typed, without future dates.
+    description: BCB SGS series typed, without future dates (ADR-006).
     columns:
       - name: serie_codigo
+        description: SGS series code (1 = USD/BRL sell, 11 = Selic daily, 432 = Selic target).
         data_tests:
           - not_null
           - accepted_values:
               arguments:
                 values: [1, 11, 432]
                 quote: false
+      - name: serie_nome
+        description: Readable series name.
       - name: data
+        description: Observation date.
         data_tests: [not_null]
       - name: valor
+        description: Observed value (BRL per USD; % per day for 11; % per year for 432).
         data_tests: [not_null]
 
   - name: stg_ibge_ipca
     description: IPCA (general index) typed; `valor` is NULL where SIDRA has no data ('...').
     columns:
       - name: variavel_codigo
+        description: SIDRA variable (63 monthly, 69 year-to-date, 2265 12-month, 66 weight).
         data_tests:
           - not_null
           - accepted_values:
               arguments:
                 values: [63, 66, 69, 2265]
                 quote: false
+      - name: variavel_nome
+        description: Variable name as delivered.
       - name: mes_referencia
+        description: First day of the reference month.
         data_tests: [not_null]
+      - name: unidade_medida
+        description: Unit as delivered; NULL when SIDRA sends an empty unit.
+      - name: valor
+        description: Variable value; NULL when SIDRA reports no data.

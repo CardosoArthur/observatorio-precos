@@ -82,3 +82,13 @@ mesmo arquivo, usar a média do preço por chave.
   - The latest month is partial (see `n_dias_coleta`) and has no IPCA until IBGE publishes it.
   - The price is not weighted by station volume; ANP collects a sample of stations.
   - 241 of the 8,833 mart rows have fewer than 10 observations (minimum 1); the largest monthly price moves come from such thin cells (for example 23.8% for aditivada gasoline in AP with 1 observation). Dashboards must filter by `n_observacoes`.
+
+## ADR-009: incremental staging, unit tests, freshness and docs
+
+- **Incremental `stg_anp_precos`** (`delete+insert`, key = cnpj_revenda, produto, data_coleta). A key is recomputed from all its raw rows whenever any raw row of that key was loaded after the newest `ingested_at` stored in staging. A plain "new rows only" filter would be wrong here: a later "mensal" file must be able to override rows of "ultimas_4_semanas" that were already staged (ADR-005).
+- **Evidence (copy of the real warehouse, 2026-10-13):** I removed one mensal file from raw, rebuilt staging, reloaded the file and ran the incremental model. Result identical to a full refresh (0 rows of difference in both directions); 15,367 rows moved from `ultimas_4_semanas` to `mensal`. Staging took 11.4 s on full refresh and 1.4 s on an incremental run with no changes. The fact and mart stay full tables (about 3 s and 1 s).
+- **Known limitation:** rows removed from raw are not detected by the incremental run; use `--full-refresh`. Changing the model to incremental also needs one `--full-refresh`, because the previous table has no `ingested_at` column.
+- **Unit tests** (mocked inputs) cover the rules that matter: mensal wins over ultimas_4_semanas, repeated keys are averaged, CNPJ/unit/brand cleaning, SIDRA `...` becomes NULL, future SGS dates are dropped.
+- **New data tests:** no distinct raw key is lost in staging; the latest load of every source key succeeded; macro values (IPCA, Selic, USD/BRL) stay inside wide sanity bounds.
+- **Source freshness** uses the business date (collection date, observation date, reference month), not the load time. Thresholds are warn/error: ANP 45/120 days, SGS 7/15 days, IPCA 60/100 days. They will fire on a stale portfolio copy of the data by design.
+- **Docs:** every column of the 9 models has a description; `dbt docs generate` builds the catalog and the lineage graph.

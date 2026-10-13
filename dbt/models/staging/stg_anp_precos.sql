@@ -1,10 +1,22 @@
-{{ config(materialized='table') }}
+{{
+    config(
+        materialized='incremental',
+        unique_key=['cnpj_revenda', 'produto', 'data_coleta'],
+        incremental_strategy='delete+insert',
+        on_schema_change='fail'
+    )
+}}
 
 {#-
     One row per (cnpj_revenda, produto, data_coleta).
     ADR-005: when the same key comes from several source groups, the group with the best
     priority wins (mensal > semestral > ultimas_4_semanas); within that group, repeated
     keys are collapsed to the average price.
+
+    ADR-009 (incremental): a key is recomputed from ALL its raw rows whenever any raw row of
+    that key was loaded after the newest `ingested_at` already stored here. This keeps the
+    priority rule correct when a later file (e.g. a new "mensal") overrides older rows.
+    Rows deleted from raw are not detected: use `dbt run --full-refresh -s stg_anp_precos`.
 -#}
 
 with source as (
@@ -13,7 +25,7 @@ with source as (
 
 ),
 
-typed as (
+parsed as (
 
     select
         regexp_replace(cnpj_revenda, '[^0-9]', '', 'g')                      as cnpj_revenda,
@@ -36,6 +48,7 @@ typed as (
         trim(bairro)                                                         as bairro,
         trim(cep)                                                            as cep,
         _source_group                                                        as source_group,
+        _ingested_at                                                         as ingested_at,
         case _source_group
             when 'mensal' then 1
             when 'semestral' then 2
@@ -46,13 +59,44 @@ typed as (
 
 ),
 
+{% if is_incremental() %}
+
+changed_keys as (
+
+    select distinct cnpj_revenda, produto, data_coleta
+    from parsed
+    where ingested_at > (select max(ingested_at) from {{ this }})
+
+),
+
+typed as (
+
+    select parsed.*
+    from parsed
+    inner join changed_keys using (cnpj_revenda, produto, data_coleta)
+
+),
+
+{% else %}
+
+typed as (
+
+    select * from parsed
+
+),
+
+{% endif %}
+
 ranked as (
 
     select
         *,
         min(source_priority) over (
             partition by cnpj_revenda, produto, data_coleta
-        ) as best_priority
+        ) as best_priority,
+        max(ingested_at) over (
+            partition by cnpj_revenda, produto, data_coleta
+        ) as key_ingested_at
     from typed
 
 ),
@@ -77,6 +121,7 @@ select
     min(bairro)                                 as bairro,
     min(cep)                                    as cep,
     min(source_group)                           as source_group,
-    count(*)                                    as n_registros_origem
+    count(*)                                    as n_registros_origem,
+    max(key_ingested_at)                        as ingested_at
 from best
 group by cnpj_revenda, produto, data_coleta

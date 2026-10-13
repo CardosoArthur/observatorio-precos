@@ -1,76 +1,179 @@
 version: 2
-
 models:
-  - name: dim_data
-    description: Calendar (one row per day) from the first to the last ANP collection date.
-    columns:
-      - name: data_key
-        data_tests: [unique, not_null]
-      - name: data
-        data_tests: [unique, not_null]
+- name: dim_data
+  description: Calendar (one row per day) from the first to the last ANP collection date.
+  columns:
+  - name: data_key
+    description: Surrogate key yyyymmdd.
+    data_tests:
+    - unique
+    - not_null
+  - name: data
+    description: Calendar date.
+    data_tests:
+    - unique
+    - not_null
+  - name: ano
+    description: Year.
+  - name: mes
+    description: Month number.
+  - name: mes_referencia
+    description: First day of the month.
+  - name: trimestre
+    description: Quarter (1-4).
+  - name: dia_semana_iso
+    description: ISO weekday (1 = Monday).
+  - name: is_fim_de_semana
+    description: True on Saturday and Sunday.
+- name: dim_produto
+  description: Fuel products and their family and unit.
+  columns:
+  - name: produto_key
+    description: Surrogate key (md5 of produto).
+    data_tests:
+    - unique
+    - not_null
+  - name: produto
+    description: Fuel product.
+    data_tests:
+    - unique
+    - not_null
+  - name: familia
+    description: Product family (GASOLINA, DIESEL, ETANOL, GNV).
+  - name: unidade_medida
+    description: Price unit of the product.
+- name: dim_localidade
+  description: Municipalities (uf, municipio) and region.
+  columns:
+  - name: localidade_key
+    description: Surrogate key (md5 of uf and municipio).
+    data_tests:
+    - unique
+    - not_null
+  - name: uf
+    description: State code.
+    data_tests:
+    - not_null
+  - name: municipio
+    description: Municipality.
+  - name: regiao_sigla
+    description: Macro-region code.
+- name: dim_revenda
+  description: One row per station CNPJ with its latest attributes.
+  columns:
+  - name: cnpj_revenda
+    description: Station CNPJ, digits only.
+    data_tests:
+    - unique
+    - not_null
+  - name: revenda
+    description: Latest trade name.
+  - name: bandeira_atual
+    description: Latest brand.
+  - name: uf
+    description: Latest state.
+  - name: municipio
+    description: Latest municipality.
+  - name: bairro
+    description: Latest neighbourhood.
+  - name: cep
+    description: Latest postal code.
+  - name: primeira_coleta
+    description: First collection date seen.
+  - name: ultima_coleta
+    description: Last collection date seen.
+  - name: n_registros
+    description: Number of price rows for the station.
+- name: fact_preco_combustivel
+  description: One price per (cnpj_revenda, produto, data_coleta).
+  columns:
+  - name: produto_key
+    description: FK to dim_produto.
+    data_tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('dim_produto')
+          field: produto_key
+  - name: localidade_key
+    description: FK to dim_localidade.
+    data_tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('dim_localidade')
+          field: localidade_key
+  - name: data_key
+    description: FK to dim_data.
+    data_tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('dim_data')
+          field: data_key
+  - name: cnpj_revenda
+    description: FK to dim_revenda.
+    data_tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('dim_revenda')
+          field: cnpj_revenda
+  - name: valor_venda
+    description: Resale price (R$ per litre; per m3 for GNV).
+    data_tests:
+    - not_null
+  - name: data_coleta
+    description: Collection date.
+  - name: bandeira
+    description: Brand at collection time.
+  - name: source_group
+    description: Source group that supplied the row.
+  - name: n_registros_origem
+    description: Raw rows collapsed into this row.
+- name: mart_preco_inflacao_mensal
+  description: 'Monthly average fuel price by product and state, next to IPCA, Selic target and USD/BRL.
+    The latest month can be partial and may lack IPCA.
 
-  - name: dim_produto
-    description: Fuel products and their family and unit.
-    columns:
-      - name: produto_key
-        data_tests: [unique, not_null]
-      - name: produto
-        data_tests: [unique, not_null]
-
-  - name: dim_localidade
-    description: Municipalities (uf, municipio) and region.
-    columns:
-      - name: localidade_key
-        data_tests: [unique, not_null]
-      - name: uf
-        data_tests: [not_null]
-
-  - name: dim_revenda
-    description: One row per station CNPJ with its latest attributes.
-    columns:
-      - name: cnpj_revenda
-        data_tests: [unique, not_null]
-
-  - name: fact_preco_combustivel
-    description: One price per (cnpj_revenda, produto, data_coleta).
-    columns:
-      - name: produto_key
-        data_tests:
-          - not_null
-          - relationships:
-              arguments: {to: ref('dim_produto'), field: produto_key}
-      - name: localidade_key
-        data_tests:
-          - not_null
-          - relationships:
-              arguments: {to: ref('dim_localidade'), field: localidade_key}
-      - name: data_key
-        data_tests:
-          - not_null
-          - relationships:
-              arguments: {to: ref('dim_data'), field: data_key}
-      - name: cnpj_revenda
-        data_tests:
-          - not_null
-          - relationships:
-              arguments: {to: ref('dim_revenda'), field: cnpj_revenda}
-      - name: valor_venda
-        data_tests: [not_null]
-
-  - name: mart_preco_inflacao_mensal
-    description: >
-      Monthly average fuel price by product and state, next to IPCA, Selic target and USD/BRL.
-      The latest month can be partial and may lack IPCA.
-    columns:
-      - name: mes_referencia
-        data_tests: [not_null]
-      - name: produto
-        data_tests: [not_null]
-      - name: uf
-        data_tests: [not_null]
-      - name: preco_medio
-        data_tests: [not_null]
-      - name: selic_meta_aa_media
-        data_tests: [not_null]
-      - name: usd_brl_venda_medio
-        data_tests: [not_null]
+    '
+  columns:
+  - name: mes_referencia
+    description: First day of the month.
+    data_tests:
+    - not_null
+  - name: produto
+    description: Fuel product.
+    data_tests:
+    - not_null
+  - name: uf
+    description: State code.
+    data_tests:
+    - not_null
+  - name: preco_medio
+    description: Simple average of all price observations in the month.
+    data_tests:
+    - not_null
+  - name: selic_meta_aa_media
+    description: Average Selic target in the month, % per year.
+    data_tests:
+    - not_null
+  - name: usd_brl_venda_medio
+    description: Average USD/BRL sell rate in the month.
+    data_tests:
+    - not_null
+  - name: n_observacoes
+    description: Price observations in the month.
+  - name: n_revendas
+    description: Distinct stations observed.
+  - name: n_dias_coleta
+    description: Distinct collection days (low in the latest, partial month).
+  - name: variacao_preco_mom_pct
+    description: Price change vs previous month, in %.
+  - name: variacao_preco_12m_pct
+    description: Price change vs same month a year earlier, in %.
+  - name: ipca_mensal_pct
+    description: IPCA monthly change, %. NULL until published.
+  - name: ipca_acum_ano_pct
+    description: IPCA year-to-date, %.
+  - name: ipca_12m_pct
+    description: IPCA 12-month change, %.

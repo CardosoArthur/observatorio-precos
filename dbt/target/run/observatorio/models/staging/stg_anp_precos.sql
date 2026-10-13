@@ -12,7 +12,7 @@
 
 ),
 
-typed as (
+parsed as (
 
     select
         regexp_replace(cnpj_revenda, '[^0-9]', '', 'g')                      as cnpj_revenda,
@@ -35,6 +35,7 @@ typed as (
         trim(bairro)                                                         as bairro,
         trim(cep)                                                            as cep,
         _source_group                                                        as source_group,
+        _ingested_at                                                         as ingested_at,
         case _source_group
             when 'mensal' then 1
             when 'semestral' then 2
@@ -45,13 +46,26 @@ typed as (
 
 ),
 
+
+
+typed as (
+
+    select * from parsed
+
+),
+
+
+
 ranked as (
 
     select
         *,
         min(source_priority) over (
             partition by cnpj_revenda, produto, data_coleta
-        ) as best_priority
+        ) as best_priority,
+        max(ingested_at) over (
+            partition by cnpj_revenda, produto, data_coleta
+        ) as key_ingested_at
     from typed
 
 ),
@@ -76,9 +90,11 @@ select
     min(bairro)                                 as bairro,
     min(cep)                                    as cep,
     min(source_group)                           as source_group,
-    count(*)                                    as n_registros_origem
+    count(*)                                    as n_registros_origem,
+    max(key_ingested_at)                        as ingested_at
 from best
 group by cnpj_revenda, produto, data_coleta
     );
     
+  
   

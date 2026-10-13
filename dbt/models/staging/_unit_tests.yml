@@ -1,0 +1,72 @@
+version: 2
+
+# Unit tests run on mocked inputs: they prove the business rules, independent of real data.
+unit_tests:
+  - name: stg_anp_precos_mensal_wins_over_ultimas_4_semanas
+    description: Same key in two source groups keeps the higher-priority group (mensal).
+    model: stg_anp_precos
+    overrides:
+      macros:
+        is_incremental: false
+    given:
+      - input: source('raw', 'anp_precos')
+        rows:
+          - {cnpj_revenda: "12.486.809/0004-05", produto: "DIESEL S10", data_coleta: "01/07/2026", valor_venda: "6,80", _source_group: "mensal", _ingested_at: "2026-10-01 10:00:00"}
+          - {cnpj_revenda: "12.486.809/0004-05", produto: "DIESEL S10", data_coleta: "01/07/2026", valor_venda: "6,70", _source_group: "ultimas_4_semanas", _ingested_at: "2026-10-01 11:00:00"}
+    expect:
+      rows:
+        - {cnpj_revenda: "12486809000405", produto: "DIESEL S10", data_coleta: "2026-07-01", valor_venda: 6.80, source_group: "mensal", n_registros_origem: 1}
+
+  - name: stg_anp_precos_repeated_key_in_same_group_is_averaged
+    description: Repeated key inside the winning group becomes the average price.
+    model: stg_anp_precos
+    overrides:
+      macros:
+        is_incremental: false
+    given:
+      - input: source('raw', 'anp_precos')
+        rows:
+          - {cnpj_revenda: "11111111000111", produto: "GASOLINA", data_coleta: "05/01/2026", valor_venda: "6,00", _source_group: "semestral", _ingested_at: "2026-10-01 10:00:00"}
+          - {cnpj_revenda: "11111111000111", produto: "GASOLINA", data_coleta: "05/01/2026", valor_venda: "7,00", _source_group: "semestral", _ingested_at: "2026-10-01 10:00:00"}
+    expect:
+      rows:
+        - {cnpj_revenda: "11111111000111", produto: "GASOLINA", data_coleta: "2026-01-05", valor_venda: 6.50, n_registros_origem: 2}
+
+  - name: stg_anp_precos_cleaning_rules
+    description: CNPJ digits only, upper-case names, unit standardised, VIBRA ENERGIA mapped to VIBRA, decimal comma parsed.
+    model: stg_anp_precos
+    overrides:
+      macros:
+        is_incremental: false
+    given:
+      - input: source('raw', 'anp_precos')
+        rows:
+          - {cnpj_revenda: " 01.600.494/0001-08", produto: "gnv", data_coleta: "10/02/2026", valor_venda: "4,5", unidade_medida: "R$ / m³", bandeira: "Vibra Energia", estado_sigla: "al", municipio: "rio largo", _source_group: "semestral", _ingested_at: "2026-10-01 10:00:00"}
+    expect:
+      rows:
+        - {cnpj_revenda: "01600494000108", produto: "GNV", data_coleta: "2026-02-10", valor_venda: 4.50, unidade_medida: "R$/m3", bandeira: "VIBRA", uf: "AL", municipio: "RIO LARGO"}
+
+  - name: stg_ibge_ipca_no_data_marker_becomes_null
+    description: SIDRA's '...' (no data) becomes NULL and the period becomes a date.
+    model: stg_ibge_ipca
+    given:
+      - input: source('raw', 'ibge_ipca')
+        rows:
+          - {variavel_codigo: "2265", periodo_codigo: "202001", unidade_medida: "", valor: "..."}
+          - {variavel_codigo: "2265", periodo_codigo: "202012", unidade_medida: "%", valor: "4.52"}
+    expect:
+      rows:
+        - {variavel_codigo: 2265, mes_referencia: "2020-01-01", unidade_medida: null, valor: null}
+        - {variavel_codigo: 2265, mes_referencia: "2020-12-01", unidade_medida: "%", valor: 4.52}
+
+  - name: stg_bcb_sgs_drops_future_dates
+    description: Rows dated after today are dropped (series 432 can carry future dates).
+    model: stg_bcb_sgs
+    given:
+      - input: source('raw', 'bcb_sgs')
+        rows:
+          - {serie_codigo: "432", serie_nome: "selic_meta", data: "02/01/2022", valor: "9.25"}
+          - {serie_codigo: "432", serie_nome: "selic_meta", data: "02/01/2999", valor: "9.25"}
+    expect:
+      rows:
+        - {serie_codigo: 432, data: "2022-01-02", valor: 9.25}
