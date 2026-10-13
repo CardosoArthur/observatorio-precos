@@ -1,5 +1,5 @@
 # Data and warehouse never go to Git
-data/
+/data/
 warehouse/
 logs/
 *.duckdb

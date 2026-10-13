@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Observatório de Preços e Inflação</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+  :root { --bg:#fff; --fg:#1b1f24; --mut:#5b6672; --card:#f5f7fa; --line:#d8dee6; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0f1318; --fg:#e8ecf0; --mut:#9aa6b2; --card:#171d24; --line:#2a323c; }
+  }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.5 system-ui,sans-serif; }
+  main { max-width:960px; margin:0 auto; padding:24px 16px 64px; }
+  h1 { margin:0 0 4px; font-size:1.6rem; } h2 { margin:0 0 4px; font-size:1.15rem; }
+  .sub, .note { color:var(--mut); font-size:.9rem; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:10px;
+            padding:16px; margin:20px 0; }
+  .plot { width:100%; height:380px; }
+  footer { color:var(--mut); font-size:.85rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Observatório de Preços e Inflação (Brasil)</h1>
+  <p class="sub" id="meta">Carregando…</p>
+
+  <section>
+    <h2 id="t1"></h2><p class="note" id="n1"></p>
+    <div id="c1" class="plot"></div>
+  </section>
+  <section>
+    <h2 id="t2"></h2><p class="note" id="n2"></p>
+    <div id="c2" class="plot"></div>
+  </section>
+  <section>
+    <h2 id="t3"></h2><p class="note" id="n3"></p>
+    <div id="c3" class="plot"></div>
+  </section>
+  <section>
+    <h2 id="t4"></h2><p class="note" id="n4"></p>
+    <div id="c4" class="plot"></div>
+  </section>
+
+  <footer>
+    Fontes públicas: ANP (preços de revenda), IBGE SIDRA (IPCA), BCB SGS (Selic, câmbio).
+    Pipeline: DuckDB + dbt + Airflow. Preço nacional = média ponderada pelo nº de observações.
+    Células UF/produto/mês com menos de <span id="minobs"></span> observações são omitidas.
+  </footer>
+</main>
+
+<script>
+const fmtBRL = v => "R$ " + v.toFixed(2).replace(".", ",");
+const fmtPct = v => (v >= 0 ? "+" : "") + v.toFixed(1).replace(".", ",") + "%";
+const monthLabel = s => { const [y, m] = s.split("-"); return m + "/" + y; };
+const txt = (id, s) => { document.getElementById(id).textContent = s; };
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const layout = (extra) => Object.assign({
+  margin: {t: 10, r: 20, b: 50, l: 55}, paper_bgcolor: "rgba(0,0,0,0)",
+  plot_bgcolor: "rgba(0,0,0,0)", font: {color: css("--fg")},
+  legend: {orientation: "h", y: -0.2}
+}, extra);
+const cfg = {displayModeBar: false, responsive: true};
+
+fetch("data/dashboard.json").then(r => r.json()).then(d => {
+  txt("meta", "Dados até " + monthLabel(d.latest_month.slice(0, 7)) +
+      " (último mês completo com IPCA publicado).");
+  txt("minobs", d.min_obs);
+
+  // 1. Gasoline nominal vs real
+  const g = d.gasoline, g0 = g[0], g1 = g[g.length - 1];
+  const nomPct = (g1.nominal / g0.nominal - 1) * 100;
+  const realPct = (g1.real / g0.real - 1) * 100;
+  txt("t1", "Gasolina: " + fmtPct(nomPct) + " no preço nominal, " + fmtPct(realPct) + " em termos reais");
+  txt("n1", "De " + monthLabel(g0.m.slice(0, 7)) + " a " + monthLabel(g1.m.slice(0, 7)) +
+      " o IPCA acumulou " + fmtPct(d.ipca_acum_pct) + ". Preço real = nominal deflacionado pelo IPCA (base jan/22).");
+  Plotly.newPlot("c1", [
+    {x: g.map(r => r.m), y: g.map(r => r.nominal), name: "Nominal", mode: "lines"},
+    {x: g.map(r => r.m), y: g.map(r => r.real), name: "Real (R$ de jan/22)", mode: "lines"}
+  ], layout({yaxis: {title: "R$/litro"}}), cfg);
+
+  // 2. Ethanol / gasoline ratio
+  const below = d.ratio.filter(r => r.ratio < 70).length;
+  txt("t2", "Etanol compensa em " + below + " de " + d.ratio.length + " UFs (razão < 70%)");
+  txt("n2", "Razão preço etanol / gasolina em " + monthLabel(d.latest_month.slice(0, 7)) +
+      ". 70% é regra prática, não limite exato (depende do consumo do veículo).");
+  Plotly.newPlot("c2", [{
+    x: d.ratio.map(r => r.uf), y: d.ratio.map(r => r.ratio), type: "bar",
+    marker: {color: d.ratio.map(r => r.ratio < 70 ? "#2a9d8f" : "#8a94a0")}
+  }], layout({yaxis: {title: "Etanol / gasolina (%)"},
+              shapes: [{type: "line", x0: -0.5, x1: d.ratio.length - 0.5, y0: 70, y1: 70,
+                        line: {dash: "dash", color: css("--mut")}}]}), cfg);
+
+  // 3. Gasoline price by UF
+  const lo = d.spread[0], hi = d.spread[d.spread.length - 1];
+  txt("t3", "Gasolina: " + hi.uf + " é " + fmtPct((hi.price / lo.price - 1) * 100) +
+      " mais cara que " + lo.uf);
+  txt("n3", hi.uf + " " + fmtBRL(hi.price) + " vs " + lo.uf + " " + fmtBRL(lo.price) +
+      " em " + monthLabel(d.latest_month.slice(0, 7)) + ".");
+  Plotly.newPlot("c3", [{
+    x: d.spread.map(r => r.uf), y: d.spread.map(r => r.price), type: "bar",
+    marker: {color: "#e76f51"}
+  }], layout({yaxis: {title: "R$/litro", range: [Math.floor(lo.price * 10) / 10 - 0.2, null]}}), cfg);
+
+  // 4. Diesel S10 vs USD
+  const x = d.diesel_usd.map(r => r.m);
+  txt("t4", "Diesel S10 e dólar: sem relação linear mensal (r = " +
+      d.corr_changes.toFixed(2).replace(".", ",") + ")");
+  txt("n4", "Correlação entre variações mensais: " + d.corr_changes.toFixed(2) +
+      "; entre níveis: " + d.corr_levels.toFixed(2) + " (" + d.n_months_corr + " meses). " +
+      "Correlação baixa não prova ausência de causalidade: há defasagens, tributos e política de preços.");
+  Plotly.newPlot("c4", [
+    {x, y: d.diesel_usd.map(r => r.diesel), name: "Diesel S10 (R$/l)", mode: "lines"},
+    {x, y: d.diesel_usd.map(r => r.usd), name: "USD/BRL", mode: "lines", yaxis: "y2"}
+  ], layout({yaxis: {title: "R$/litro"},
+             yaxis2: {title: "R$/US$", overlaying: "y", side: "right"}}), cfg);
+}).catch(e => txt("meta", "Erro ao carregar dados: " + e));
+</script>
+</body>
+</html>
