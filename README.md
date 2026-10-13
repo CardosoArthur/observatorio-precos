@@ -6,7 +6,7 @@ Pipeline ELT com dados públicos para analisar como o preço dos combustíveis a
 consumidor se relaciona com inflação (IPCA), Selic e câmbio.
 
 **Fontes:** ANP (preços de revenda), IBGE SIDRA (IPCA) e Banco Central SGS (Selic e câmbio).
-**Stack:** Python, DuckDB, dbt, Airflow (ou Kestra), Docker, GitHub Actions.
+**Stack:** Python, DuckDB, dbt, Airflow (ou Kestra), Docker.
 
 ## O que já existe
 
