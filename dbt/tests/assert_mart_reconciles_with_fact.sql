@@ -1,0 +1,5 @@
+-- The mart must not lose or invent observations: totals must match the fact table.
+select m.total as mart_rows, f.total as fact_rows
+from (select sum(n_observacoes) as total from {{ ref('mart_preco_inflacao_mensal') }}) as m
+cross join (select count(*) as total from {{ ref('fact_preco_combustivel') }}) as f
+where m.total <> f.total

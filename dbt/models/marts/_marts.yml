@@ -1,0 +1,76 @@
+version: 2
+
+models:
+  - name: dim_data
+    description: Calendar (one row per day) from the first to the last ANP collection date.
+    columns:
+      - name: data_key
+        data_tests: [unique, not_null]
+      - name: data
+        data_tests: [unique, not_null]
+
+  - name: dim_produto
+    description: Fuel products and their family and unit.
+    columns:
+      - name: produto_key
+        data_tests: [unique, not_null]
+      - name: produto
+        data_tests: [unique, not_null]
+
+  - name: dim_localidade
+    description: Municipalities (uf, municipio) and region.
+    columns:
+      - name: localidade_key
+        data_tests: [unique, not_null]
+      - name: uf
+        data_tests: [not_null]
+
+  - name: dim_revenda
+    description: One row per station CNPJ with its latest attributes.
+    columns:
+      - name: cnpj_revenda
+        data_tests: [unique, not_null]
+
+  - name: fact_preco_combustivel
+    description: One price per (cnpj_revenda, produto, data_coleta).
+    columns:
+      - name: produto_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('dim_produto'), field: produto_key}
+      - name: localidade_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('dim_localidade'), field: localidade_key}
+      - name: data_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('dim_data'), field: data_key}
+      - name: cnpj_revenda
+        data_tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('dim_revenda'), field: cnpj_revenda}
+      - name: valor_venda
+        data_tests: [not_null]
+
+  - name: mart_preco_inflacao_mensal
+    description: >
+      Monthly average fuel price by product and state, next to IPCA, Selic target and USD/BRL.
+      The latest month can be partial and may lack IPCA.
+    columns:
+      - name: mes_referencia
+        data_tests: [not_null]
+      - name: produto
+        data_tests: [not_null]
+      - name: uf
+        data_tests: [not_null]
+      - name: preco_medio
+        data_tests: [not_null]
+      - name: selic_meta_aa_media
+        data_tests: [not_null]
+      - name: usd_brl_venda_medio
+        data_tests: [not_null]

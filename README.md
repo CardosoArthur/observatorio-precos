@@ -1,6 +1,6 @@
 # Observatório de Preços e Inflação (Brasil)
 
-> **Status: em andamento (etapa S4, modelagem dbt: staging pronto).** Este README cresce a cada etapa.
+> **Status: em andamento (etapa S4, modelagem dbt: staging, dimensões, fato e mart prontos).** Este README cresce a cada etapa.
 
 Pipeline ELT com dados públicos para analisar como o preço dos combustíveis ao
 consumidor se relaciona com inflação (IPCA), Selic e câmbio.
@@ -14,7 +14,7 @@ consumidor se relaciona com inflação (IPCA), Selic e câmbio.
 | --- | --- | --- |
 | S3 | Loaders da ANP, SIDRA e SGS para DuckDB (camada `raw`), com testes | Pronto |
 | S4 | dbt: camada `staging` (tipagem, limpeza, deduplicação) com testes | Pronto |
-| S4 | dbt: dimensões, fato e mart mensal | Pendente |
+| S4 | dbt: dimensões, fato e mart mensal (preço x IPCA x Selic x câmbio) | Pronto |
 | S5 | Testes de qualidade, incremental e documentação | Pendente |
 | S6 | Orquestração em Docker | Pendente |
 | S7 | CI, diagrama e dashboard | Pendente |
@@ -58,7 +58,7 @@ Na raiz do repositório, com a venv ativa e o `raw` já carregado:
 dbt build --project-dir dbt --profiles-dir dbt
 ```
 
-Cria as views/tabelas do schema `staging` e roda os testes. O caminho do banco
+Cria os schemas `staging` e `marts` (dimensões, fato e mart mensal) e roda os testes. O caminho do banco
 vem de `DUCKDB_PATH` (padrão `warehouse/observatorio.duckdb`).
 
 ## Estrutura

@@ -72,3 +72,13 @@ mesmo arquivo, usar a média do preço por chave.
   - IPCA: `mes_referencia` as a date; SIDRA's `...` marker (no data) becomes NULL. Variable 2265 (12-month change) has no value for 202001-202011 (11 rows) because the series starts in 2020-01.
 - **Evidence (copy of the real warehouse, 2026-10-13):** 4,227,065 raw rows -> 4,178,146 staged. The 48,919 removed rows are the 48,899 cross-file overlaps plus 20 in-file duplicates found by the probe. 23 dbt tests pass.
 - **Consequence:** brand harmonisation covers only the documented VIBRA case; other possible variants (e.g. ALE vs ALESAT) are left as delivered because the equivalence is not confirmed.
+
+## ADR-008: star schema and monthly mart
+
+- **Decision:** `marts` schema with `dim_data`, `dim_produto`, `dim_localidade` (uf, municipio), `dim_revenda` (latest attributes per CNPJ), `fact_preco_combustivel` (grain: cnpj_revenda, produto, data_coleta) and `mart_preco_inflacao_mensal` (grain: mes_referencia, produto, uf). Surrogate keys are md5 hashes built by a local macro (no external dbt packages).
+- **Mart metrics:** simple average price of all observations in the month; month-over-month and 12-month price change; monthly, year-to-date and 12-month IPCA; average Selic target (series 432, % per year); average USD/BRL sell rate (series 1).
+- **Evidence (copy of the real warehouse, 2026-10-13):** fact 4,178,146 rows (same as staging), 18,172 stations, 465 municipalities, 6 products; mart 8,833 rows over 58 months (2022-01 to 2026-10) and 27 states. 62 dbt tests pass, including a reconciliation test (mart observations = fact rows).
+- **Known limitations:**
+  - The latest month is partial (see `n_dias_coleta`) and has no IPCA until IBGE publishes it.
+  - The price is not weighted by station volume; ANP collects a sample of stations.
+  - 241 of the 8,833 mart rows have fewer than 10 observations (minimum 1); the largest monthly price moves come from such thin cells (for example 23.8% for aditivada gasoline in AP with 1 observation). Dashboards must filter by `n_observacoes`.
