@@ -27,3 +27,10 @@ Thumbs.db
 .vscode/
 .idea/
 exports/
+
+
+# dbt build artifacts and local state
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
+dbt/.user.yml
